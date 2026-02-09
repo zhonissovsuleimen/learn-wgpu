@@ -14,15 +14,14 @@ use wgpu::{
 
 pub struct RenderPass {
   vertex_buffer: Buffer,
-  particle_buffer: Buffer,
+  particle_buffer: BufferWrapper,
   pipeline: RenderPipeline,
-  //temp
-  count: u32,
 }
 
 impl GpuPass for RenderPass {
   fn new(gpu: &GpuWrapper, window: &WindowWrapper, buffers: &HashMap<&'static str, BufferWrapper>) -> RenderPass {
-    let buffer_wrapper = match buffers.get("test particle buffer") {
+    let key = "test particle buffer";
+    let buffer_wrapper = match buffers.get(&key) {
       Some(buffer_wrapper) => buffer_wrapper,
       None => {
         error!("Could not find particle buffer");
@@ -83,9 +82,8 @@ impl GpuPass for RenderPass {
 
     RenderPass {
       vertex_buffer,
-      particle_buffer: buffer_wrapper.buffer.clone(),
+      particle_buffer: buffer_wrapper.clone(),
       pipeline,
-      count: buffer_wrapper.count,
     }
   }
 
@@ -109,11 +107,13 @@ impl GpuPass for RenderPass {
       multiview_mask: None,
     };
 
+    let particles = &self.particle_buffer;
+
     let mut rpass = encoder.begin_render_pass(&render_pass_descriptor);
     rpass.set_pipeline(&self.pipeline);
-    rpass.set_vertex_buffer(0, self.particle_buffer.slice(..));
+    rpass.set_vertex_buffer(0, particles.buffer.slice(..));
     rpass.set_vertex_buffer(1, self.vertex_buffer.slice(..));
-    rpass.draw(0..3, 0..self.count);
+    rpass.draw(0..3, 0..particles.count);
   }
 }
 
