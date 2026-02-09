@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use super::window_wrapper::WindowWrapper;
 use crate::{
   app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapperError},
-  gpu_pass::{self, gpu_pass::GpuPass},
+  gpu_pass::{self, buffer_wrapper::BufferWrapper, gpu_pass::GpuPass},
 };
 use tracing::error;
 use wgpu::{
-  Buffer, CommandEncoderDescriptor, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterError, RequestAdapterOptions, RequestDeviceError,
+  CommandEncoderDescriptor, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterError, RequestAdapterOptions, RequestDeviceError,
   TextureFormat, TextureViewDescriptor,
 };
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::WindowId};
@@ -16,7 +16,7 @@ pub struct State {
   gpu: GpuWrapper,
   gpu_passes: Vec<Box<dyn GpuPass>>,
   windows: HashMap<WindowId, WindowWrapper>,
-  buffers: HashMap<&'static str, Buffer>,
+  buffers: HashMap<&'static str, BufferWrapper>,
 }
 
 impl State {
