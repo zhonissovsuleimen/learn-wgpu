@@ -7,8 +7,8 @@ use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::Act
 #[derive(Default)]
 pub struct App {
   state: Option<State>,
-  last_frame: Option<Instant>,
   last_print: Option<Instant>,
+  frame_count: u64,
 }
 
 impl ApplicationHandler for App {
@@ -39,19 +39,20 @@ impl ApplicationHandler for App {
       WindowEvent::RedrawRequested => {
         let now = Instant::now();
 
-        match self.last_frame {
-          Some(last_frame) => {
-            if self.last_print.is_none_or(|last_print| (now - last_print).as_micros() > 1000000) {
-              let dif = now - last_frame;
-              let fps = 1e6 / dif.as_micros() as f64;
-              info!("FPS: {fps}");
+        self.frame_count += 1;
 
+        match self.last_print {
+          Some(last) => {
+            let elapsed = (now - last).as_secs_f64();
+            if elapsed >= 1.0 {
+              let fps = self.frame_count as f64 / elapsed;
+              info!("FPS: {:.1}", fps);
+              self.frame_count = 0;
               self.last_print = Some(now);
             }
           }
-          None => (),
+          None => self.last_print = Some(now),
         }
-        self.last_frame = Some(now);
 
         state.render(window_id);
         state.request_redraw(window_id);
