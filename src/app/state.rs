@@ -49,6 +49,7 @@ impl State {
 
     //temp
     state.gpu_passes.push(Box::new(gpu_pass::render_pass::RenderPass::default()));
+    state.gpu_passes.push(Box::new(gpu_pass::compute_pass::ComputePass::default()));
 
     Ok(state)
   }
