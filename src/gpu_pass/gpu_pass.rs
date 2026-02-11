@@ -7,9 +7,12 @@ use crate::{
 };
 
 pub trait GpuPass {
-  fn new(gpu: &GpuWrapper, window: &WindowWrapper, buffers: &HashMap<&'static str, BufferWrapper>) -> Self
-  where
-    Self: Sized;
-
-  fn run(&mut self, encoder: &mut CommandEncoder, view: &TextureView);
+  fn run(
+    &mut self,
+    encoder: &mut CommandEncoder,
+    window: &WindowWrapper,
+    gpu: &GpuWrapper,
+    view: &TextureView,
+    buffers: &mut HashMap<&'static str, BufferWrapper>,
+  );
 }

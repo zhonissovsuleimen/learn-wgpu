@@ -48,9 +48,7 @@ impl State {
     state.request_redraw(id);
 
     //temp
-    let window = state.windows.get(&id).unwrap();
-    let test_pass = gpu_pass::render_pass::RenderPass::new(&state.gpu, window, &state.buffers);
-    state.gpu_passes.push(Box::new(test_pass));
+    state.gpu_passes.push(Box::new(gpu_pass::render_pass::RenderPass::default()));
 
     Ok(state)
   }
@@ -92,7 +90,7 @@ impl State {
 
         let mut command_encoder = self.gpu.device.create_command_encoder(&CommandEncoderDescriptor::default());
         for pass in &mut self.gpu_passes {
-          pass.run(&mut command_encoder, &view);
+          pass.run(&mut command_encoder, &window_wrapper, &self.gpu, &view, &mut self.buffers);
         }
 
         self.gpu.queue.submit(Some(command_encoder.finish()));
