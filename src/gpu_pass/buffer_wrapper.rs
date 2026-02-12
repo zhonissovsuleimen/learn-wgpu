@@ -1,8 +1,7 @@
-use wgpu::{Buffer, VertexBufferLayout};
+use wgpu::Buffer;
 
 #[derive(Clone)]
 pub struct BufferWrapper {
   pub buffer: Buffer,
-  pub layout: VertexBufferLayout<'static>,
   pub count: u32,
 }

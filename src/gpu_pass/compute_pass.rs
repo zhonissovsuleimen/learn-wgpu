@@ -4,11 +4,10 @@ use crate::{
 };
 use std::{collections::HashMap, time::Instant};
 use wgpu::{
-  BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType,
-  BufferSize, BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, PipelineLayoutDescriptor,
-  ShaderStages, TextureView, VertexAttribute, VertexBufferLayout, VertexStepMode, include_wgsl,
+  BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
+  BufferBindingType, BufferSize, BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
+  PipelineLayoutDescriptor, ShaderStages, TextureView, include_wgsl,
   util::{BufferInitDescriptor, DeviceExt},
-  vertex_attr_array,
 };
 
 #[derive(Default)]
@@ -110,21 +109,14 @@ impl ComputePass {
     device.create_buffer_init(&BufferInitDescriptor {
       label: Some("Params buffer"),
       contents: bytemuck::cast_slice(&params_arr),
-      usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+      usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
     })
   }
 
   fn init_buffer(device: &Device) -> BufferWrapper {
     let count = 1000;
-    const FALLBACK_ATTRIBUTES: &[VertexAttribute] = &vertex_attr_array![0 => Float32x2, 1 => Float32x2];
-
-    let layout = VertexBufferLayout {
-      array_stride: 16,
-      step_mode: VertexStepMode::Instance,
-      attributes: &FALLBACK_ATTRIBUTES,
-    };
-
     let mut data = vec![0.0f32; (4 * count) as usize];
+
     let pos_range = -1.0..1.0;
     let vel_range = -0.1..0.1;
     for i in 0..count {
@@ -140,11 +132,7 @@ impl ComputePass {
       usage: BufferUsages::VERTEX | BufferUsages::STORAGE | BufferUsages::COPY_DST,
     });
 
-    BufferWrapper {
-      buffer,
-      layout,
-      count: count as u32,
-    }
+    BufferWrapper { buffer, count: count as u32 }
   }
 
   fn init_bind_group_layout(device: &Device, params_buffer: &Buffer, particle_buffer_a: &Buffer, particle_buffer_b: &Buffer) -> BindGroupLayout {
@@ -196,15 +184,15 @@ impl ComputePass {
       label: Some("Compute bind group A"),
       layout: &bind_group_layout,
       entries: &[
-        wgpu::BindGroupEntry {
+        BindGroupEntry {
           binding: 0,
           resource: params_buffer.as_entire_binding(),
         },
-        wgpu::BindGroupEntry {
+        BindGroupEntry {
           binding: 1,
           resource: particle_buffer_a.as_entire_binding(),
         },
-        wgpu::BindGroupEntry {
+        BindGroupEntry {
           binding: 2,
           resource: particle_buffer_b.as_entire_binding(),
         },
@@ -223,15 +211,15 @@ impl ComputePass {
       label: Some("Compute bind group B"),
       layout: &bind_group_layout,
       entries: &[
-        wgpu::BindGroupEntry {
+        BindGroupEntry {
           binding: 0,
           resource: params_buffer.as_entire_binding(),
         },
-        wgpu::BindGroupEntry {
+        BindGroupEntry {
           binding: 1,
           resource: particle_buffer_b.as_entire_binding(),
         },
-        wgpu::BindGroupEntry {
+        BindGroupEntry {
           binding: 2,
           resource: particle_buffer_a.as_entire_binding(),
         },
