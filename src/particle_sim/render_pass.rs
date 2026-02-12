@@ -1,8 +1,8 @@
 use crate::{
-  app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapper},
-  gpu_pass::{buffer_wrapper::BufferWrapper, gpu_pass::GpuPass},
+  app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapper},
+  gpu_pass::gpu_pass::GpuPass,
+  particle_sim::{particle::Particle, shared::PARTICLES},
 };
-use std::collections::HashMap;
 use tracing::error;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
@@ -23,16 +23,8 @@ pub struct RenderPass {
 }
 
 impl GpuPass for RenderPass {
-  fn run(
-    &mut self,
-    encoder: &mut CommandEncoder,
-    window: &WindowWrapper,
-    gpu: &GpuWrapper,
-    view: &TextureView,
-    buffers: &mut HashMap<&'static str, BufferWrapper>,
-  ) {
-    let key = "test particle buffer";
-    let Some(particles) = buffers.get(key) else {
+  fn run(&mut self, encoder: &mut CommandEncoder, window: &WindowWrapper, gpu: &GpuWrapper, view: &TextureView, resources: &mut Resources) {
+    let Some(particles) = resources.get::<Particle>(PARTICLES) else {
       error!("No particle buffer available");
       return;
     };

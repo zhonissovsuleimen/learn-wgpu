@@ -1,8 +1,9 @@
 use crate::{
-  app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapper},
+  app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapper},
   gpu_pass::{buffer_wrapper::BufferWrapper, gpu_pass::GpuPass},
+  particle_sim::{particle::Particle, shared::PARTICLES},
 };
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
   BufferBindingType, BufferSize, BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
@@ -19,22 +20,15 @@ pub struct ComputePass {
   bind_group_a: Option<BindGroup>,
   bind_group_b: Option<BindGroup>,
 
-  buffer_a: Option<BufferWrapper>,
-  buffer_b: Option<BufferWrapper>,
+  buffer_a: Option<BufferWrapper<Particle>>,
+  buffer_b: Option<BufferWrapper<Particle>>,
   write_to_buffer_a: bool,
 
   last_run: Option<Instant>,
 }
 
 impl GpuPass for ComputePass {
-  fn run(
-    &mut self,
-    encoder: &mut CommandEncoder,
-    _window: &WindowWrapper,
-    gpu: &GpuWrapper,
-    _view: &TextureView,
-    buffers: &mut HashMap<&'static str, BufferWrapper>,
-  ) {
+  fn run(&mut self, encoder: &mut CommandEncoder, _window: &WindowWrapper, gpu: &GpuWrapper, _view: &TextureView, resources: &mut Resources) {
     let (_, _, device, queue) = gpu.into();
 
     let params_buffer = self.params_buffer.get_or_insert_with(|| ComputePass::init_params_buffer(device));
@@ -88,8 +82,7 @@ impl GpuPass for ComputePass {
       clone = particle_buffer_b.clone();
     }
     workgroup_count = (clone.count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-    let key = "test particle buffer";
-    buffers.insert(key, clone);
+    resources.insert(PARTICLES, clone);
 
     let pipeline = self.pipeline.get_or_insert_with(|| ComputePass::init_pipeline(device, bind_group_layout));
     cpass.set_pipeline(pipeline);
@@ -113,7 +106,7 @@ impl ComputePass {
     })
   }
 
-  fn init_buffer(device: &Device) -> BufferWrapper {
+  fn init_buffer(device: &Device) -> BufferWrapper<Particle> {
     let count = 1000;
     let mut data = vec![0.0f32; (4 * count) as usize];
 
@@ -132,7 +125,7 @@ impl ComputePass {
       usage: BufferUsages::VERTEX | BufferUsages::STORAGE | BufferUsages::COPY_DST,
     });
 
-    BufferWrapper { buffer, count: count as u32 }
+    BufferWrapper::new(buffer, count as u32)
   }
 
   fn init_bind_group_layout(device: &Device, params_buffer: &Buffer, particle_buffer_a: &Buffer, particle_buffer_b: &Buffer) -> BindGroupLayout {

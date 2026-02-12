@@ -5,6 +5,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 
 mod app;
 mod gpu_pass;
+mod particle_sim;
 use app::app::App;
 
 #[tokio::main]

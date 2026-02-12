@@ -1,18 +1,7 @@
-use std::collections::HashMap;
 use wgpu::{CommandEncoder, TextureView};
 
-use crate::{
-  app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapper},
-  gpu_pass::buffer_wrapper::BufferWrapper,
-};
+use crate::app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapper};
 
 pub trait GpuPass {
-  fn run(
-    &mut self,
-    encoder: &mut CommandEncoder,
-    window: &WindowWrapper,
-    gpu: &GpuWrapper,
-    view: &TextureView,
-    buffers: &mut HashMap<&'static str, BufferWrapper>,
-  );
+  fn run(&mut self, encoder: &mut CommandEncoder, window: &WindowWrapper, gpu: &GpuWrapper, view: &TextureView, resources: &mut Resources);
 }

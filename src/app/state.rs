@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use super::window_wrapper::WindowWrapper;
 use crate::{
-  app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapperError},
-  gpu_pass::{self, buffer_wrapper::BufferWrapper, gpu_pass::GpuPass},
+  app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapperError},
+  gpu_pass::gpu_pass::GpuPass,
+  particle_sim,
 };
 use tracing::error;
 use wgpu::{
@@ -16,7 +17,7 @@ pub struct State {
   gpu: GpuWrapper,
   gpu_passes: Vec<Box<dyn GpuPass>>,
   windows: HashMap<WindowId, WindowWrapper>,
-  buffers: HashMap<&'static str, BufferWrapper>,
+  resources: Resources,
 }
 
 impl State {
@@ -41,15 +42,15 @@ impl State {
       gpu,
       gpu_passes: Vec::new(),
       windows: HashMap::new(),
-      buffers: HashMap::new(),
+      resources: Resources::new(),
     };
 
     let id = state.add_window(event_loop).await?;
     state.request_redraw(id);
 
     //temp
-    state.gpu_passes.push(Box::new(gpu_pass::render_pass::RenderPass::default()));
-    state.gpu_passes.push(Box::new(gpu_pass::compute_pass::ComputePass::default()));
+    state.gpu_passes.push(Box::new(particle_sim::render_pass::RenderPass::default()));
+    state.gpu_passes.push(Box::new(particle_sim::compute_pass::ComputePass::default()));
 
     Ok(state)
   }
@@ -91,7 +92,7 @@ impl State {
 
         let mut command_encoder = self.gpu.device.create_command_encoder(&CommandEncoderDescriptor::default());
         for pass in &mut self.gpu_passes {
-          pass.run(&mut command_encoder, &window_wrapper, &self.gpu, &view, &mut self.buffers);
+          pass.run(&mut command_encoder, &window_wrapper, &self.gpu, &view, &mut self.resources);
         }
 
         self.gpu.queue.submit(Some(command_encoder.finish()));
