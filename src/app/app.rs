@@ -1,14 +1,12 @@
-use std::time::Instant;
-
 use super::state::State;
-use tracing::{error, info};
+use crate::app::module::Module;
+use tracing::error;
 use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::WindowId};
 
 #[derive(Default)]
 pub struct App {
   state: Option<State>,
-  last_print: Option<Instant>,
-  frame_count: u64,
+  modules: Vec<Box<dyn Module>>,
 }
 
 impl ApplicationHandler for App {
@@ -37,23 +35,7 @@ impl ApplicationHandler for App {
         }
       }
       WindowEvent::RedrawRequested => {
-        let now = Instant::now();
-
-        self.frame_count += 1;
-
-        match self.last_print {
-          Some(last) => {
-            let elapsed = (now - last).as_secs_f64();
-            if elapsed >= 1.0 {
-              let fps = self.frame_count as f64 / elapsed;
-              info!("FPS: {:.1}", fps);
-              self.frame_count = 0;
-              self.last_print = Some(now);
-            }
-          }
-          None => self.last_print = Some(now),
-        }
-
+        self.modules.iter_mut().for_each(|module| module.on_redraw());
         state.render(window_id);
         state.request_redraw(window_id);
       }
@@ -62,5 +44,11 @@ impl ApplicationHandler for App {
       }
       _ => (),
     }
+  }
+}
+
+impl App {
+  pub fn add_module(&mut self, module: Box<dyn Module>) {
+    self.modules.push(module);
   }
 }

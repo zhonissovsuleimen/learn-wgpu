@@ -5,8 +5,12 @@ use winit::event_loop::{ControlFlow, EventLoop};
 
 mod app;
 mod gpu_pass;
+mod modules;
 mod particle_sim;
+
 use app::app::App;
+
+use crate::modules::fps::FpsModule;
 
 #[tokio::main]
 async fn main() {
@@ -19,5 +23,7 @@ async fn main() {
   event_loop.set_control_flow(ControlFlow::Poll);
 
   let mut app = App::default();
+  app.add_module(Box::new(FpsModule::default()));
+
   event_loop.run_app(&mut app).unwrap();
 }
