@@ -10,6 +10,7 @@ use wgpu::{
   PipelineLayoutDescriptor, ShaderStages, TextureView, include_wgsl,
   util::{BufferInitDescriptor, DeviceExt},
 };
+use winit::dpi::PhysicalSize;
 
 #[derive(Default)]
 pub struct ComputePass {
@@ -28,12 +29,12 @@ pub struct ComputePass {
 }
 
 impl GpuPass for ComputePass {
-  fn run(&mut self, encoder: &mut CommandEncoder, _window: &WindowWrapper, gpu: &GpuWrapper, _view: &TextureView, resources: &mut Resources) {
+  fn run(&mut self, encoder: &mut CommandEncoder, window: &WindowWrapper, gpu: &GpuWrapper, _view: &TextureView, resources: &mut Resources) {
     let (_, _, device, queue) = gpu.into();
 
     let params_buffer = self.params_buffer.get_or_insert_with(|| ComputePass::init_params_buffer(device));
-    let particle_buffer_a = self.buffer_a.get_or_insert_with(|| ComputePass::init_buffer(device));
-    let particle_buffer_b = self.buffer_b.get_or_insert_with(|| ComputePass::init_buffer(device));
+    let particle_buffer_a = self.buffer_a.get_or_insert_with(|| ComputePass::init_buffer(device, window));
+    let particle_buffer_b = self.buffer_b.get_or_insert_with(|| ComputePass::init_buffer(device, window));
 
     let bind_group_layout = self
       .bind_group_layout
@@ -106,15 +107,19 @@ impl ComputePass {
     })
   }
 
-  fn init_buffer(device: &Device) -> BufferWrapper<Particle> {
-    let count = 1000;
+  fn init_buffer(device: &Device, window: &WindowWrapper) -> BufferWrapper<Particle> {
+    let size = match window.window.current_monitor() {
+      Some(monitor) => monitor.size().cast::<f32>(),
+      None => PhysicalSize::new(1920.0, 1080.0),
+    };
+
+    let count = 100;
     let mut data = vec![0.0f32; (4 * count) as usize];
 
-    let pos_range = -1.0..1.0;
-    let vel_range = -0.1..0.1;
+    let vel_range = -10.0..10.0;
     for i in 0..count {
-      data[4 * i] = rand::random_range(pos_range.clone());
-      data[4 * i + 1] = rand::random_range(pos_range.clone());
+      data[4 * i] = rand::random_range(0.0..size.width);
+      data[4 * i + 1] = rand::random_range(0.0..size.height);
       data[4 * i + 2] = rand::random_range(vel_range.clone());
       data[4 * i + 3] = rand::random_range(vel_range.clone());
     }

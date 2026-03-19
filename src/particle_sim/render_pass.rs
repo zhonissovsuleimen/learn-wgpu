@@ -1,14 +1,14 @@
 use crate::{
   app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapper},
   gpu_pass::gpu_pass::GpuPass,
-  particle_sim::{particle::Particle, shared::PARTICLES},
+  particle_sim::{particle::Particle, shared::PARTICLES, window::Window},
 };
 use tracing::error;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
   BufferBindingType, BufferUsages, Color, CommandEncoder, Device, FragmentState, LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor,
-  PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderStages, StoreOp, TextureView,
-  VertexBufferLayout, VertexState, VertexStepMode, include_wgsl,
+  PrimitiveState, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderStages, StoreOp,
+  TextureView, VertexBufferLayout, VertexState, VertexStepMode, include_wgsl,
   util::{BufferInitDescriptor, DeviceExt},
   vertex_attr_array,
 };
@@ -16,6 +16,8 @@ use wgpu::{
 #[derive(Default)]
 pub struct RenderPass {
   vertex_buffer: Option<Buffer>,
+  window_buffer: Option<Buffer>,
+
   pipeline: Option<RenderPipeline>,
 
   bind_group_layout: Option<BindGroupLayout>,
@@ -49,11 +51,23 @@ impl GpuPass for RenderPass {
     };
 
     let device = &gpu.device;
+
+    if self.window_buffer.is_none() {
+      let Some(buf) = RenderPass::init_window_buffer(device, window) else {
+        error!("Platform not supported: could not get window position");
+        return;
+      };
+      self.window_buffer = Some(buf);
+    }
+
+    let window_buffer = self.window_buffer.as_ref().unwrap();
+    RenderPass::update_window_buffer(&gpu.queue, window_buffer, window);
+
     let vertex_buffer = self.vertex_buffer.get_or_insert_with(|| RenderPass::init_vertex_buffer(device));
     let bind_group_layout = self.bind_group_layout.get_or_insert_with(|| RenderPass::init_bind_group_layout(device));
     let bind_group = self
       .bind_group
-      .get_or_insert_with(|| RenderPass::init_bind_group(device, bind_group_layout, &particles.buffer));
+      .get_or_insert_with(|| RenderPass::init_bind_group(device, bind_group_layout, &particles.buffer, window_buffer));
     let pipeline = self
       .pipeline
       .get_or_insert_with(|| RenderPass::init_pipeline(device, bind_group_layout, window));
@@ -68,6 +82,18 @@ impl GpuPass for RenderPass {
 }
 
 impl RenderPass {
+  fn update_window_buffer(queue: &Queue, window_buffer: &Buffer, window: &WindowWrapper) {
+    let Ok(top_left) = window.window.inner_position() else {
+      return;
+    };
+    let size = window.window.inner_size().cast::<f32>();
+    let data: [[f32; 2]; 2] = [
+      [top_left.x as f32, top_left.y as f32],
+      [top_left.x as f32 + size.width, top_left.y as f32 + size.height],
+    ];
+    queue.write_buffer(window_buffer, 0, bytemuck::bytes_of(&data));
+  }
+
   fn init_pipeline(device: &Device, bind_group_layout: &BindGroupLayout, window: &WindowWrapper) -> RenderPipeline {
     let shader = device.create_shader_module(include_wgsl!("shaders/draw.wgsl"));
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -93,7 +119,7 @@ impl RenderPass {
         module: &shader,
         entry_point: Some("main_fs"),
         compilation_options: Default::default(),
-        targets: &[Some(window.surface_config.view_formats[0].into())],
+        targets: &[Some(window.surface_config.format.into())],
       }),
       primitive: PrimitiveState::default(),
       depth_stencil: None,
@@ -106,9 +132,9 @@ impl RenderPass {
   fn init_vertex_buffer(device: &Device) -> Buffer {
     #[rustfmt::skip]
     let vertex_buffer_data: [f32; 6] = [
-      -0.01, -0.02,
-      0.01, -0.02,
-      0.00, 0.02
+      -5.0, -10.0,
+      5.0, -10.0,
+      0.0, 10.0
     ];
 
     device.create_buffer_init(&BufferInitDescriptor {
@@ -118,30 +144,69 @@ impl RenderPass {
     })
   }
 
+  fn init_window_buffer(device: &Device, window: &WindowWrapper) -> Option<Buffer> {
+    let Ok(top_left) = window.window.inner_position() else {
+      return None;
+    };
+    let size = window.window.inner_size().cast::<f32>();
+
+    let top_left = [top_left.x as f32, top_left.y as f32];
+    let bottom_right = [top_left[0] + size.width, top_left[1] + size.height];
+
+    let win = Window { top_left, bottom_right };
+
+    let data = [win.top_left, win.bottom_right];
+    let buffer = device.create_buffer_init(&BufferInitDescriptor {
+      label: Some("Window Buffer"),
+      contents: bytemuck::bytes_of(&data),
+      usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    });
+
+    Some(buffer)
+  }
+
   fn init_bind_group_layout(device: &Device) -> BindGroupLayout {
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
       label: Some("Particle bind group layout"),
-      entries: &[BindGroupLayoutEntry {
-        binding: 0,
-        visibility: ShaderStages::VERTEX,
-        ty: BindingType::Buffer {
-          ty: BufferBindingType::Storage { read_only: true },
-          has_dynamic_offset: false,
-          min_binding_size: None,
+      entries: &[
+        BindGroupLayoutEntry {
+          binding: 0,
+          visibility: ShaderStages::VERTEX,
+          ty: BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: true },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+          },
+          count: None,
         },
-        count: None,
-      }],
+        BindGroupLayoutEntry {
+          binding: 1,
+          visibility: ShaderStages::VERTEX,
+          ty: BindingType::Buffer {
+            ty: BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+          },
+          count: None,
+        },
+      ],
     })
   }
 
-  fn init_bind_group(device: &Device, bind_group_layout: &BindGroupLayout, particle_buffer: &Buffer) -> BindGroup {
+  fn init_bind_group(device: &Device, bind_group_layout: &BindGroupLayout, particle_buffer: &Buffer, window_buffer: &Buffer) -> BindGroup {
     device.create_bind_group(&BindGroupDescriptor {
       label: Some("Particle Bind Group"),
       layout: &bind_group_layout,
-      entries: &[BindGroupEntry {
-        binding: 0,
-        resource: particle_buffer.as_entire_binding(),
-      }],
+      entries: &[
+        BindGroupEntry {
+          binding: 0,
+          resource: particle_buffer.as_entire_binding(),
+        },
+        BindGroupEntry {
+          binding: 1,
+          resource: window_buffer.as_entire_binding(),
+        },
+      ],
     })
   }
 }

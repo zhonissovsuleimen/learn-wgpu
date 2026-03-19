@@ -1,9 +1,15 @@
 struct Particle {
-  pos : vec2<f32>,
-  vel : vec2<f32>,
+  pos: vec2<f32>,
+  vel: vec2<f32>,
 };
 
-@group(0) @binding(0) var<storage, read> particles : array<Particle>;
+struct Window {
+  top_left: vec2<f32>,
+  bottom_right: vec2<f32>,
+}
+
+@group(0) @binding(0) var<storage, read> particles: array<Particle>;
+@group(0) @binding(1) var<uniform> window: Window;
 
 @vertex
 fn main_vs(
@@ -18,7 +24,14 @@ fn main_vs(
     vertex.x * sin(angle) + vertex.y * cos(angle)
   );
 
-  return vec4<f32>(rotated_vertex + p.pos, 0.0, 1.0);
+  let world_pos = p.pos + rotated_vertex;
+
+  let uv = (world_pos - window.top_left) / (window.bottom_right - window.top_left);
+
+  var ndc = uv * 2.0 - 1.0;
+  ndc.y = -ndc.y;
+
+  return vec4<f32>(ndc, 0.0, 1.0);
 }
 
 @fragment
