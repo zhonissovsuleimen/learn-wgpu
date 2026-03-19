@@ -1,5 +1,5 @@
+use crate::app::gpu_wrapper::GpuWrapper;
 use std::sync::Arc;
-
 use wgpu::{CompositeAlphaMode, CreateSurfaceError, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat, TextureUsages};
 use winit::{
   dpi::PhysicalSize,
@@ -7,8 +7,6 @@ use winit::{
   event_loop::ActiveEventLoop,
   window::{Window, WindowAttributes},
 };
-
-use crate::app::gpu_wrapper::GpuWrapper;
 
 pub struct WindowWrapper {
   pub window: Arc<Window>,
@@ -25,10 +23,17 @@ impl WindowWrapper {
 
     let surface = gpu.instance.create_surface(window.clone())?;
 
+    let format = surface
+      .get_capabilities(&gpu.adapter)
+      .formats
+      .into_iter()
+      .next()
+      .unwrap_or(TextureFormat::Bgra8Unorm);
+
     let surface_config = SurfaceConfiguration {
       usage: TextureUsages::RENDER_ATTACHMENT,
-      format: TextureFormat::Rgba8UnormSrgb,
-      view_formats: vec![TextureFormat::Rgba8UnormSrgb],
+      format,
+      view_formats: vec![],
       alpha_mode: CompositeAlphaMode::Auto,
       width: window.inner_size().width,
       height: window.inner_size().height,

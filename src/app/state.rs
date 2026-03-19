@@ -1,15 +1,14 @@
-use std::collections::HashMap;
-
 use super::window_wrapper::WindowWrapper;
 use crate::{
   app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapperError},
   gpu_pass::gpu_pass::GpuPass,
   particle_sim,
 };
+use std::collections::HashMap;
 use tracing::error;
 use wgpu::{
   CommandEncoderDescriptor, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterError, RequestAdapterOptions, RequestDeviceError,
-  TextureFormat, TextureViewDescriptor,
+  TextureViewDescriptor,
 };
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::WindowId};
 
@@ -86,7 +85,7 @@ impl State {
         };
 
         let view = texture.texture.create_view(&TextureViewDescriptor {
-          format: Some(TextureFormat::Rgba8UnormSrgb),
+          format: Some(window_wrapper.surface_config.format),
           ..Default::default()
         });
 
