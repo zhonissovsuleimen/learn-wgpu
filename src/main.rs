@@ -19,7 +19,15 @@ async fn main() {
 
   tracing::subscriber::set_global_default(subscriber).expect("Failed to set global subscriber");
 
-  let event_loop = EventLoop::new().unwrap();
+  let mut builder = EventLoop::builder();
+
+  #[cfg(target_os = "linux")]
+  {
+    use winit::platform::x11::EventLoopBuilderExtX11;
+    builder.with_x11();
+  }
+
+  let event_loop = builder.build().unwrap();
   event_loop.set_control_flow(ControlFlow::Poll);
 
   let mut app = App::default();
