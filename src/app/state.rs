@@ -49,8 +49,8 @@ impl State {
 
     //temp
     state.gpu_passes.push(Box::new(particle_sim::render_pass::RenderPass::default()));
-    state.gpu_passes.push(Box::new(particle_sim::compute_pass::ComputePass::default()));
-
+    let compute_pass = particle_sim::compute_pass::ComputePass::init(&state.gpu);
+    state.gpu_passes.push(Box::new(compute_pass));
     Ok(state)
   }
 
