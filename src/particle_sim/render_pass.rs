@@ -1,36 +1,27 @@
 use crate::{
-  app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapper},
-  gpu_pass::gpu_pass::GpuPass,
-  particle_sim::{particle::Particle, shared::PARTICLES, window::Window},
+  app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapper},
+  gpu_pass::buffer_wrapper::BufferWrapper,
+  particle_sim::particle::Particle,
 };
-use tracing::error;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
   BufferBindingType, BufferUsages, Color, CommandEncoder, Device, FragmentState, LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor,
-  PrimitiveState, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderStages, StoreOp,
-  TextureView, VertexBufferLayout, VertexState, VertexStepMode, include_wgsl,
+  PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderStages, StoreOp, TextureView,
+  VertexBufferLayout, VertexState, VertexStepMode, include_wgsl,
   util::{BufferInitDescriptor, DeviceExt},
   vertex_attr_array,
 };
 
-#[derive(Default)]
 pub struct RenderPass {
-  vertex_buffer: Option<Buffer>,
-  window_buffer: Option<Buffer>,
+  vertex_buffer: Buffer,
+  particle_buffer: BufferWrapper<Particle>,
+  pipeline: RenderPipeline,
 
-  pipeline: Option<RenderPipeline>,
-
-  bind_group_layout: Option<BindGroupLayout>,
-  bind_group: Option<BindGroup>,
+  bind_group: BindGroup,
 }
 
-impl GpuPass for RenderPass {
-  fn run(&mut self, encoder: &mut CommandEncoder, window: &WindowWrapper, gpu: &GpuWrapper, view: &TextureView, resources: &mut Resources) {
-    let Some(particles) = resources.get::<Particle>(PARTICLES) else {
-      error!("No particle buffer available");
-      return;
-    };
-
+impl RenderPass {
+  pub fn run(&mut self, encoder: &mut CommandEncoder, view: &TextureView) {
     let color_attachments = [Some(RenderPassColorAttachment {
       view: &view,
       depth_slice: None,
@@ -50,48 +41,28 @@ impl GpuPass for RenderPass {
       multiview_mask: None,
     };
 
-    let device = &gpu.device;
-
-    if self.window_buffer.is_none() {
-      let Some(buf) = RenderPass::init_window_buffer(device, window) else {
-        error!("Platform not supported: could not get window position");
-        return;
-      };
-      self.window_buffer = Some(buf);
-    }
-
-    let window_buffer = self.window_buffer.as_ref().unwrap();
-    RenderPass::update_window_buffer(&gpu.queue, window_buffer, window);
-
-    let vertex_buffer = self.vertex_buffer.get_or_insert_with(|| RenderPass::init_vertex_buffer(device));
-    let bind_group_layout = self.bind_group_layout.get_or_insert_with(|| RenderPass::init_bind_group_layout(device));
-    let bind_group = self
-      .bind_group
-      .get_or_insert_with(|| RenderPass::init_bind_group(device, bind_group_layout, &particles.buffer, window_buffer));
-    let pipeline = self
-      .pipeline
-      .get_or_insert_with(|| RenderPass::init_pipeline(device, bind_group_layout, window));
-
     let mut rpass = encoder.begin_render_pass(&render_pass_descriptor);
 
-    rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, &*bind_group, &[]);
-    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    rpass.draw(0..3, 0..particles.count);
+    rpass.set_pipeline(&self.pipeline);
+    rpass.set_bind_group(0, &self.bind_group, &[]);
+    rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    rpass.draw(0..3, 0..self.particle_buffer.count);
   }
-}
 
-impl RenderPass {
-  fn update_window_buffer(queue: &Queue, window_buffer: &Buffer, window: &WindowWrapper) {
-    let Ok(top_left) = window.window.inner_position() else {
-      return;
-    };
-    let size = window.window.inner_size().cast::<f32>();
-    let data: [[f32; 2]; 2] = [
-      [top_left.x as f32, top_left.y as f32],
-      [top_left.x as f32 + size.width, top_left.y as f32 + size.height],
-    ];
-    queue.write_buffer(window_buffer, 0, bytemuck::bytes_of(&data));
+  pub fn init(gpu: &GpuWrapper, window: &WindowWrapper, window_buffer: &Buffer, particle_buffer: BufferWrapper<Particle>) -> RenderPass {
+    let device = &gpu.device;
+    let vertex_buffer = RenderPass::init_vertex_buffer(device);
+
+    let layout = RenderPass::init_bind_group_layout(device);
+    let bind_group = RenderPass::init_bind_group(device, &layout, &particle_buffer.buffer, &window_buffer);
+    let pipeline = RenderPass::init_pipeline(device, &layout, window);
+
+    RenderPass {
+      vertex_buffer,
+      particle_buffer,
+      pipeline,
+      bind_group,
+    }
   }
 
   fn init_pipeline(device: &Device, bind_group_layout: &BindGroupLayout, window: &WindowWrapper) -> RenderPipeline {
@@ -142,27 +113,6 @@ impl RenderPass {
       contents: bytemuck::bytes_of(&vertex_buffer_data),
       usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
     })
-  }
-
-  fn init_window_buffer(device: &Device, window: &WindowWrapper) -> Option<Buffer> {
-    let Ok(top_left) = window.window.inner_position() else {
-      return None;
-    };
-    let size = window.window.inner_size().cast::<f32>();
-
-    let top_left = [top_left.x as f32, top_left.y as f32];
-    let bottom_right = [top_left[0] + size.width, top_left[1] + size.height];
-
-    let win = Window { top_left, bottom_right };
-
-    let data = [win.top_left, win.bottom_right];
-    let buffer = device.create_buffer_init(&BufferInitDescriptor {
-      label: Some("Window Buffer"),
-      contents: bytemuck::bytes_of(&data),
-      usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-    });
-
-    Some(buffer)
   }
 
   fn init_bind_group_layout(device: &Device) -> BindGroupLayout {

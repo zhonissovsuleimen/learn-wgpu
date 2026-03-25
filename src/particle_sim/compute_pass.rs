@@ -1,21 +1,15 @@
-use crate::{
-  app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapper},
-  gpu_pass::{buffer_wrapper::BufferWrapper, gpu_pass::GpuPass},
-  particle_sim::{particle::Particle, shared::PARTICLES},
-};
+use crate::{app::gpu_wrapper::GpuWrapper, gpu_pass::buffer_wrapper::BufferWrapper, particle_sim::particle::Particle};
 use std::time::Instant;
-use tracing::error;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
   BufferBindingType, BufferSize, BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
-  PipelineLayoutDescriptor, Queue, ShaderStages, TextureView, include_wgsl,
+  PipelineLayoutDescriptor, Queue, ShaderStages, include_wgsl,
   util::{BufferInitDescriptor, DeviceExt},
 };
 
 pub struct ComputePass {
-  pipeline: ComputePipeline,
   params_buffer: Buffer,
-  window_buffer: Buffer,
+  pipeline: ComputePipeline,
 
   bind_group_a: BindGroup,
   bind_group_b: BindGroup,
@@ -27,16 +21,36 @@ pub struct ComputePass {
   last_run: Option<Instant>,
 }
 
-impl GpuPass for ComputePass {
-  fn run(&mut self, encoder: &mut CommandEncoder, window: &WindowWrapper, gpu: &GpuWrapper, _view: &TextureView, resources: &mut Resources) {
-    if !ComputePass::is_supported(window) {
-      error!("Platform not supported: could not get window position");
-      return;
-    }
+impl ComputePass {
+  pub fn init(gpu: &GpuWrapper, window_buffer: &Buffer) -> ComputePass {
+    let device = &gpu.device;
+    let params_buffer = ComputePass::init_params_buffer(device);
 
+    let count = 100;
+    let particle_data = ComputePass::init_particle_data(count);
+    let particle_buffer_a = ComputePass::init_particle_buffer(device, particle_data.clone());
+    let particle_buffer_b = ComputePass::init_particle_buffer(device, particle_data);
+
+    let layout = ComputePass::init_bind_group_layout(device, &params_buffer, &window_buffer, &particle_buffer_a, &particle_buffer_b);
+    let bind_group_a = ComputePass::init_bind_group_a(device, &params_buffer, &window_buffer, &particle_buffer_a, &particle_buffer_b, &layout);
+    let bind_group_b = ComputePass::init_bind_group_b(device, &params_buffer, &window_buffer, &particle_buffer_a, &particle_buffer_b, &layout);
+
+    let pipeline = ComputePass::init_pipeline(device, &layout);
+    ComputePass {
+      params_buffer,
+      pipeline,
+      bind_group_a,
+      bind_group_b,
+      particle_buffer_a: BufferWrapper::new(particle_buffer_a, count as u32),
+      particle_buffer_b: BufferWrapper::new(particle_buffer_b, count as u32),
+      write_to_buffer_a: false,
+      last_run: None,
+    }
+  }
+
+  pub fn run(&mut self, encoder: &mut CommandEncoder, gpu: &GpuWrapper) {
     let queue = &gpu.queue;
     self.update_params_buffer(queue);
-    self.update_window_buffer(queue, window);
 
     let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
       label: Some("Compute pass descriptor"),
@@ -54,7 +68,6 @@ impl GpuPass for ComputePass {
     };
 
     let workgroup_count = (buffer.count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-    resources.insert(PARTICLES, buffer.clone());
 
     cpass.set_pipeline(&self.pipeline);
     cpass.dispatch_workgroups(workgroup_count, 1, 1);
@@ -62,34 +75,12 @@ impl GpuPass for ComputePass {
     self.write_to_buffer_a = !self.write_to_buffer_a;
     self.last_run = Some(Instant::now());
   }
-}
 
-impl ComputePass {
-  pub fn init(gpu: &GpuWrapper) -> ComputePass {
-    let device = &gpu.device;
-    let params_buffer = ComputePass::init_params_buffer(device);
-    let window_buffer = ComputePass::init_window_buffer(device);
-
-    let count = 100;
-    let particle_data = ComputePass::init_particle_data(count);
-    let particle_buffer_a = ComputePass::init_particle_buffer(device, particle_data.clone());
-    let particle_buffer_b = ComputePass::init_particle_buffer(device, particle_data);
-
-    let layout = ComputePass::init_bind_group_layout(device, &params_buffer, &window_buffer, &particle_buffer_a, &particle_buffer_b);
-    let bind_group_a = ComputePass::init_bind_group_a(device, &params_buffer, &window_buffer, &particle_buffer_a, &particle_buffer_b, &layout);
-    let bind_group_b = ComputePass::init_bind_group_b(device, &params_buffer, &window_buffer, &particle_buffer_a, &particle_buffer_b, &layout);
-
-    let pipeline = ComputePass::init_pipeline(device, &layout);
-    ComputePass {
-      params_buffer,
-      window_buffer,
-      pipeline,
-      bind_group_a,
-      bind_group_b,
-      particle_buffer_a: BufferWrapper::new(particle_buffer_a, count as u32),
-      particle_buffer_b: BufferWrapper::new(particle_buffer_b, count as u32),
-      write_to_buffer_a: false,
-      last_run: None,
+  pub fn get_particle_buffer(&self) -> &BufferWrapper<Particle> {
+    if self.write_to_buffer_a {
+      &self.particle_buffer_a
+    } else {
+      &self.particle_buffer_b
     }
   }
 
@@ -101,16 +92,6 @@ impl ComputePass {
     device.create_buffer_init(&BufferInitDescriptor {
       label: Some("Params buffer"),
       contents: bytemuck::cast_slice(&params_arr),
-      usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-    })
-  }
-
-  fn init_window_buffer(device: &Device) -> Buffer {
-    let data = [[0.0, 0.0], [0.0, 0.0]];
-
-    device.create_buffer_init(&BufferInitDescriptor {
-      label: Some("Window Buffer"),
-      contents: bytemuck::bytes_of(&data),
       usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
     })
   }
@@ -282,22 +263,5 @@ impl ComputePass {
     };
     let new_params_data = [dt];
     queue.write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&new_params_data));
-  }
-
-  fn update_window_buffer(&mut self, queue: &Queue, window: &WindowWrapper) {
-    let Ok(top_left) = window.window.inner_position() else {
-      return;
-    };
-
-    let size = window.window.inner_size().cast::<f32>();
-    let data: [[f32; 2]; 2] = [
-      [top_left.x as f32, top_left.y as f32],
-      [top_left.x as f32 + size.width, top_left.y as f32 + size.height],
-    ];
-    queue.write_buffer(&self.window_buffer, 0, bytemuck::bytes_of(&data));
-  }
-
-  fn is_supported(window: &WindowWrapper) -> bool {
-    window.window.inner_position().is_ok()
   }
 }

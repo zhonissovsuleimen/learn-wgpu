@@ -1,8 +1,7 @@
 use super::window_wrapper::WindowWrapper;
 use crate::{
-  app::{gpu_wrapper::GpuWrapper, resources::Resources, window_wrapper::WindowWrapperError},
-  gpu_pass::gpu_pass::GpuPass,
-  particle_sim,
+  app::{gpu_wrapper::GpuWrapper, pass::Pass, window_wrapper::WindowWrapperError},
+  particle_sim::particle_sim::ParticleSim,
 };
 use std::collections::HashMap;
 use tracing::error;
@@ -14,9 +13,8 @@ use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::WindowId};
 
 pub struct State {
   gpu: GpuWrapper,
-  gpu_passes: Vec<Box<dyn GpuPass>>,
   windows: HashMap<WindowId, WindowWrapper>,
-  resources: Resources,
+  passes: Vec<Box<dyn Pass>>,
 }
 
 impl State {
@@ -39,18 +37,17 @@ impl State {
 
     let mut state = State {
       gpu,
-      gpu_passes: Vec::new(),
       windows: HashMap::new(),
-      resources: Resources::new(),
+      passes: vec![],
     };
 
     let id = state.add_window(event_loop).await?;
     state.request_redraw(id);
 
-    //temp
-    state.gpu_passes.push(Box::new(particle_sim::render_pass::RenderPass::default()));
-    let compute_pass = particle_sim::compute_pass::ComputePass::init(&state.gpu);
-    state.gpu_passes.push(Box::new(compute_pass));
+    let window = state.windows.get(&id).unwrap();
+    let sim = ParticleSim::init(&state.gpu, window);
+    state.passes.push(Box::new(sim));
+
     Ok(state)
   }
 
@@ -90,8 +87,8 @@ impl State {
         });
 
         let mut command_encoder = self.gpu.device.create_command_encoder(&CommandEncoderDescriptor::default());
-        for pass in &mut self.gpu_passes {
-          pass.run(&mut command_encoder, &window_wrapper, &self.gpu, &view, &mut self.resources);
+        for pass in &mut self.passes {
+          pass.run(&mut command_encoder, &window_wrapper, &self.gpu, &view);
         }
 
         self.gpu.queue.submit(Some(command_encoder.finish()));
