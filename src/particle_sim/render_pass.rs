@@ -1,6 +1,6 @@
 use crate::{
+  app::buffer_wrapper::BufferWrapper,
   app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapper},
-  gpu_pass::buffer_wrapper::BufferWrapper,
   particle_sim::particle::Particle,
 };
 use wgpu::{

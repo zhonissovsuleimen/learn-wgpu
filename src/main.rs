@@ -4,7 +4,6 @@ use tracing_subscriber::FmtSubscriber;
 use winit::event_loop::{ControlFlow, EventLoop};
 
 mod app;
-mod gpu_pass;
 mod modules;
 mod particle_sim;
 

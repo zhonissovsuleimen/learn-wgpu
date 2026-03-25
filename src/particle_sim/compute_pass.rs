@@ -1,4 +1,4 @@
-use crate::{app::gpu_wrapper::GpuWrapper, gpu_pass::buffer_wrapper::BufferWrapper, particle_sim::particle::Particle};
+use crate::{app::buffer_wrapper::BufferWrapper, app::gpu_wrapper::GpuWrapper, particle_sim::particle::Particle};
 use std::time::Instant;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
