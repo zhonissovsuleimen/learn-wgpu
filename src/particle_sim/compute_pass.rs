@@ -26,7 +26,7 @@ impl ComputePass {
     let device = &gpu.device;
     let params_buffer = ComputePass::init_params_buffer(device);
 
-    let count = 100;
+    let count = 500;
     let particle_data = ComputePass::init_particle_data(count);
     let particle_buffer_a = ComputePass::init_particle_buffer(device, particle_data.clone());
     let particle_buffer_b = ComputePass::init_particle_buffer(device, particle_data);
