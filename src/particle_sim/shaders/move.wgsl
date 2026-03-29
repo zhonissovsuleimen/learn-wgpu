@@ -13,7 +13,7 @@ const COHESION_CLOSE_RADIUS: f32 = 100.0;
 const SEPARATION_STRENGTH: f32 = 20.0;
 const SEPARATION_RADIUS: f32 = 20.0;
 
-const XENOPHOBIA_STRENGTH: f32 = 20.0;
+const XENOPHOBIA_STRENGTH: f32 = 5.0;
 const XENOPHOBIA_START_RADIUS: f32 = 200.0;
 const XENOPHOBIA_END_RADIUS: f32 = 250.0;
 
@@ -69,6 +69,12 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
     if dist <= COHESION_CLOSE_RADIUS {
       cohesion_close += other.pos - pos;
+
+      const cos_30: f32 = 0.866;
+      let angle_dif = dot(safe_normalize(vel), safe_normalize(other.vel));
+      if length(vel) <= length(other.vel) && angle_dif > cos_30 {
+        color = other.color;
+      }
     }
 
     if dist <= SEPARATION_RADIUS {
