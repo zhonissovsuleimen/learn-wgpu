@@ -1,12 +1,18 @@
 struct Particle {
   pos: vec2<f32>,
   vel: vec2<f32>,
+  color: vec4<f32>,
 };
 
 struct Window {
   top_left: vec2<f32>,
   bottom_right: vec2<f32>,
 }
+
+struct VOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) color: vec4<f32>,
+};
 
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> window: Window;
@@ -15,7 +21,7 @@ struct Window {
 fn main_vs(
   @builtin(instance_index) id : u32,
   @location(0) vertex : vec2<f32>,
-) -> @builtin(position) vec4<f32> {
+) -> VOut {
   let p = particles[id];
 
   let angle = -atan2(p.vel.x, p.vel.y);
@@ -31,10 +37,10 @@ fn main_vs(
   var ndc = uv * 2.0 - 1.0;
   ndc.y = -ndc.y;
 
-  return vec4<f32>(ndc, 0.0, 1.0);
+  return VOut(vec4<f32>(ndc, 0.0, 1.0), p.color);
 }
 
 @fragment
-fn main_fs() -> @location(0) vec4<f32> {
-  return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+fn main_fs(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
+  return color;
 }

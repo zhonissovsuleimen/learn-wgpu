@@ -33,6 +33,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
   var pos: vec2<f32> = particlesSrc[id].pos;
   var vel: vec2<f32> = particlesSrc[id].vel;
+  var color: vec4<f32> = particlesSrc[id].color;
   let fut_pos = pos + safe_normalize(vel) * RADIUS;
   var total_force: vec2<f32> = vec2(0.0);
 
@@ -93,7 +94,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
   pos += vel * params.dt;
 
-  particlesDst[id] = Particle(pos, vel);
+  particlesDst[id] = Particle(pos, vel, color);
 }
 
 fn sdf_box(p: vec2<f32>) -> f32 {
@@ -115,6 +116,7 @@ struct Params {
 struct Particle {
   pos: vec2<f32>,
   vel: vec2<f32>,
+  color: vec4<f32>,
 };
 
 struct Window {

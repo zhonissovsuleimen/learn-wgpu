@@ -1,4 +1,4 @@
-use crate::app::gpu_wrapper::GpuWrapper;
+use crate::{app::gpu_wrapper::GpuWrapper, particle_sim::particle::Particle};
 use std::time::Instant;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
@@ -28,9 +28,9 @@ impl ComputePass {
     let params_buffer = ComputePass::init_params_buffer(device);
 
     let count = 500;
-    let particle_data = ComputePass::init_particle_data(count);
-    let particle_buffer_a = ComputePass::init_particle_buffer(device, particle_data.clone());
-    let particle_buffer_b = ComputePass::init_particle_buffer(device, particle_data);
+    let particles: Vec<Particle> = (0..count).map(|_| Particle::random()).collect();
+    let particle_buffer_a = ComputePass::init_particle_buffer(device, particles.clone());
+    let particle_buffer_b = ComputePass::init_particle_buffer(device, particles);
 
     let layout = ComputePass::init_bind_group_layout(device, &params_buffer, &window_buffer, &particle_buffer_a, &particle_buffer_b);
     let bind_group_a = ComputePass::init_bind_group_a(device, &params_buffer, &window_buffer, &particle_buffer_a, &particle_buffer_b, &layout);
@@ -96,26 +96,10 @@ impl ComputePass {
     })
   }
 
-  fn init_particle_data(count: u32) -> Vec<f32> {
-    let count = count as usize;
-    let mut data = vec![0.0f32; 4 * count];
-
-    let pos_range = 0.0..1024.0;
-    let vel_range = -10.0..10.0;
-    for i in 0..count {
-      data[4 * i] = rand::random_range(pos_range.clone());
-      data[4 * i + 1] = rand::random_range(pos_range.clone());
-      data[4 * i + 2] = rand::random_range(vel_range.clone());
-      data[4 * i + 3] = rand::random_range(vel_range.clone());
-    }
-
-    data.to_vec()
-  }
-
-  fn init_particle_buffer(device: &Device, data: Vec<f32>) -> Buffer {
+  fn init_particle_buffer(device: &Device, particles: Vec<Particle>) -> Buffer {
     device.create_buffer_init(&BufferInitDescriptor {
       label: Some("Particle buffer"),
-      contents: &bytemuck::cast_slice(&data),
+      contents: &bytemuck::cast_slice(&particles),
       usage: BufferUsages::VERTEX | BufferUsages::STORAGE | BufferUsages::COPY_DST,
     })
   }
