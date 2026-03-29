@@ -1,8 +1,4 @@
-use crate::{
-  app::buffer_wrapper::BufferWrapper,
-  app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapper},
-  particle_sim::particle::Particle,
-};
+use crate::app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapper};
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
   BufferBindingType, BufferUsages, Color, CommandEncoder, Device, FragmentState, LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor,
@@ -14,8 +10,9 @@ use wgpu::{
 
 pub struct RenderPass {
   vertex_buffer: Buffer,
-  particle_buffer: BufferWrapper<Particle>,
   pipeline: RenderPipeline,
+
+  particle_count: u32,
 
   bind_group: BindGroup,
 }
@@ -46,21 +43,21 @@ impl RenderPass {
     rpass.set_pipeline(&self.pipeline);
     rpass.set_bind_group(0, &self.bind_group, &[]);
     rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-    rpass.draw(0..3, 0..self.particle_buffer.count);
+    rpass.draw(0..3, 0..self.particle_count);
   }
 
-  pub fn init(gpu: &GpuWrapper, window: &WindowWrapper, window_buffer: &Buffer, particle_buffer: BufferWrapper<Particle>) -> RenderPass {
+  pub fn init(gpu: &GpuWrapper, window: &WindowWrapper, window_buffer: &Buffer, particle_buffer: Buffer, particle_count: u32) -> RenderPass {
     let device = &gpu.device;
     let vertex_buffer = RenderPass::init_vertex_buffer(device);
 
     let layout = RenderPass::init_bind_group_layout(device);
-    let bind_group = RenderPass::init_bind_group(device, &layout, &particle_buffer.buffer, &window_buffer);
+    let bind_group = RenderPass::init_bind_group(device, &layout, &particle_buffer, &window_buffer);
     let pipeline = RenderPass::init_pipeline(device, &layout, window);
 
     RenderPass {
       vertex_buffer,
-      particle_buffer,
       pipeline,
+      particle_count,
       bind_group,
     }
   }

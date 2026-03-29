@@ -18,8 +18,8 @@ impl ParticleSim {
     let window_buffer = ParticleSim::init_window_buffer(&gpu.device);
     let compute = ComputePass::init(gpu, &window_buffer);
 
-    let particle_buffer = compute.get_particle_buffer().clone();
-    let render = RenderPass::init(gpu, window, &window_buffer, particle_buffer);
+    let (particle_buffer, particle_count) = compute.get_particle_buffer();
+    let render = RenderPass::init(gpu, window, &window_buffer, particle_buffer.clone(), particle_count);
 
     ParticleSim {
       window_buffer,

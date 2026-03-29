@@ -1,4 +1,4 @@
-use crate::{app::buffer_wrapper::BufferWrapper, app::gpu_wrapper::GpuWrapper, particle_sim::particle::Particle};
+use crate::app::gpu_wrapper::GpuWrapper;
 use std::time::Instant;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
@@ -14,8 +14,9 @@ pub struct ComputePass {
   bind_group_a: BindGroup,
   bind_group_b: BindGroup,
 
-  particle_buffer_a: BufferWrapper<Particle>,
-  particle_buffer_b: BufferWrapper<Particle>,
+  particle_buffer_a: Buffer,
+  particle_buffer_b: Buffer,
+  particle_count: u32,
 
   write_to_buffer_a: bool,
   last_run: Option<Instant>,
@@ -41,8 +42,9 @@ impl ComputePass {
       pipeline,
       bind_group_a,
       bind_group_b,
-      particle_buffer_a: BufferWrapper::new(particle_buffer_a, count as u32),
-      particle_buffer_b: BufferWrapper::new(particle_buffer_b, count as u32),
+      particle_buffer_a: particle_buffer_a,
+      particle_buffer_b: particle_buffer_b,
+      particle_count: count,
       write_to_buffer_a: false,
       last_run: None,
     }
@@ -59,15 +61,13 @@ impl ComputePass {
 
     const WORKGROUP_SIZE: u32 = 64;
 
-    let buffer = if self.write_to_buffer_a {
+    if self.write_to_buffer_a {
       cpass.set_bind_group(0, &self.bind_group_b, &[]);
-      &self.particle_buffer_a
     } else {
       cpass.set_bind_group(0, &self.bind_group_a, &[]);
-      &self.particle_buffer_b
     };
 
-    let workgroup_count = (buffer.count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+    let workgroup_count = (self.particle_count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
 
     cpass.set_pipeline(&self.pipeline);
     cpass.dispatch_workgroups(workgroup_count, 1, 1);
@@ -76,11 +76,11 @@ impl ComputePass {
     self.last_run = Some(Instant::now());
   }
 
-  pub fn get_particle_buffer(&self) -> &BufferWrapper<Particle> {
+  pub fn get_particle_buffer(&self) -> (&Buffer, u32) {
     if self.write_to_buffer_a {
-      &self.particle_buffer_a
+      (&self.particle_buffer_a, self.particle_count)
     } else {
-      &self.particle_buffer_b
+      (&self.particle_buffer_b, self.particle_count)
     }
   }
 
@@ -96,7 +96,8 @@ impl ComputePass {
     })
   }
 
-  fn init_particle_data(count: usize) -> Vec<f32> {
+  fn init_particle_data(count: u32) -> Vec<f32> {
+    let count = count as usize;
     let mut data = vec![0.0f32; 4 * count];
 
     let pos_range = 0.0..1024.0;

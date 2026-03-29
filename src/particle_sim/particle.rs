@@ -5,5 +5,3 @@ pub struct Particle {
   pos: [f32; 2],
   vel: [f32; 2],
 }
-
-//todo buffer layouts/stide/binding type, as a trait?
