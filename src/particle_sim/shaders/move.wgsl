@@ -1,24 +1,26 @@
-const RADIUS = 200.0;
 const MAX_SPEED = 50.0;
 
-const OUTSIDE_STRENGTH: f32 = 1.0;
+const OUTSIDE_STRENGTH: f32 = 10.0;
+
 const ACCEL_STRENGTH: f32 = 0.1;
+
 const ALIGNMENT_STRENGTH: f32 = 10.0;
+const ALIGNMENT_RADIUS: f32 = 200.0;
 
 const COHESION_FAR_STRENGTH: f32 = 1.0;
 const COHESION_FAR_RADIUS: f32 = 150.0;
 const COHESION_CLOSE_STRENGTH: f32 = 20.0;
 const COHESION_CLOSE_RADIUS: f32 = 100.0;
 
-const SEPARATION_STRENGTH: f32 = 20.0;
-const SEPARATION_RADIUS: f32 = 20.0;
+const SEPARATION_STRENGTH: f32 = 30.0;
+const SEPARATION_RADIUS: f32 = 15.0;
 
 const XENOPHOBIA_STRENGTH: f32 = 5.0;
 const XENOPHOBIA_START_RADIUS: f32 = 200.0;
 const XENOPHOBIA_END_RADIUS: f32 = 250.0;
 
 @group(0) @binding(0) var<uniform> params: Params;
-@group(0) @binding(1) var<uniform> window: Window;
+@group(0) @binding(1) var<storage, read> windows: array<Window>;
 @group(0) @binding(2) var<storage, read> particlesSrc: array<Particle>;
 @group(0) @binding(3) var<storage, read_write> particlesDst: array<Particle>;
 
@@ -34,15 +36,16 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
   var pos: vec2<f32> = particlesSrc[id].pos;
   var vel: vec2<f32> = particlesSrc[id].vel;
   var color: vec4<f32> = particlesSrc[id].color;
-  let fut_pos = pos + safe_normalize(vel) * RADIUS;
   var total_force: vec2<f32> = vec2(0.0);
 
   // force that speeds up particles, so slow particles won't stay slow for long
   let accel_force = ACCEL_STRENGTH * safe_normalize(vel);
 
   // force that is applied to particles outside of the window, directed to the window center
-  let multiplier = OUTSIDE_STRENGTH * max(0.0f, sdf_box(fut_pos));
-  let direction = safe_normalize((window.top_left + window.bottom_right) * 0.5 - pos);
+  let fut_pos = pos + vel;
+  let sdf = sdf(fut_pos);
+  let direction = safe_normalize(sdf.center - pos);
+  let multiplier = OUTSIDE_STRENGTH * max(0.0f, sdf.value);
   let outside_force = direction * multiplier;
 
   // force used to make out distinct groups
@@ -59,7 +62,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let other = particlesSrc[i];
     let dist = length(other.pos - pos);
 
-    if dist <= RADIUS {
+    if dist <= ALIGNMENT_RADIUS {
       alignment += other.vel;
     }
 
@@ -103,11 +106,25 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
   particlesDst[id] = Particle(pos, vel, color);
 }
 
-fn sdf_box(p: vec2<f32>) -> f32 {
-  let center = (window.top_left + window.bottom_right) * 0.5;
-  let half_size = (window.bottom_right - window.top_left) * 0.5;
-  let d = abs(p - center) - half_size;
-  return length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0);
+fn sdf(p: vec2<f32>) -> SdfResult {
+  var value = 1000.0;
+  var center = vec2<f32>(0.0, 0.0);
+
+  for (var i = 0u; i < params.window_count; i++) {
+    let w = windows[i];
+    let this_center = (w.top_left + w.bottom_right) * 0.5;
+    let half_size = (w.bottom_right - w.top_left) * 0.5;
+    let d = abs(p - this_center) - half_size;
+
+    let this_value = length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0);
+
+    if value > this_value {
+      center = this_center;
+      value = this_value;
+    }
+  }
+
+  return SdfResult(center, value);
 }
 
 fn safe_normalize(v: vec2<f32>) -> vec2<f32> {
@@ -115,8 +132,14 @@ fn safe_normalize(v: vec2<f32>) -> vec2<f32> {
   return select(vec2(0.0), v / len, len > 0.0001);
 }
 
+struct SdfResult {
+  center: vec2<f32>,
+  value: f32,
+}
+
 struct Params {
   dt: f32,
+  window_count: u32
 };
 
 struct Particle {

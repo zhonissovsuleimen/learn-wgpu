@@ -1,10 +1,10 @@
 use super::window_wrapper::WindowWrapper;
 use crate::{
-  app::{gpu_wrapper::GpuWrapper, pass::Pass, window_wrapper::WindowWrapperError},
+  app::{gpu_wrapper::GpuWrapper, window_wrapper::WindowWrapperError},
   particle_sim::particle_sim::ParticleSim,
 };
 use std::collections::HashMap;
-use tracing::error;
+use tracing::{error, info};
 use wgpu::{
   CommandEncoderDescriptor, DeviceDescriptor, Instance, InstanceDescriptor, RequestAdapterError, RequestAdapterOptions, RequestDeviceError,
   TextureViewDescriptor,
@@ -14,7 +14,7 @@ use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop, window::WindowId};
 pub struct State {
   gpu: GpuWrapper,
   windows: HashMap<WindowId, WindowWrapper>,
-  passes: Vec<Box<dyn Pass>>,
+  sim: Option<ParticleSim>,
 }
 
 impl State {
@@ -38,15 +38,14 @@ impl State {
     let mut state = State {
       gpu,
       windows: HashMap::new(),
-      passes: vec![],
+      sim: None,
     };
 
     let id = state.add_window(event_loop).await?;
     state.request_redraw(id);
 
     let window = state.windows.get(&id).unwrap();
-    let sim = ParticleSim::init(&state.gpu, window);
-    state.passes.push(Box::new(sim));
+    state.sim = Some(ParticleSim::init(&state.gpu, window));
 
     Ok(state)
   }
@@ -54,6 +53,7 @@ impl State {
   pub async fn add_window(&mut self, event_loop: &ActiveEventLoop) -> Result<WindowId, StateError> {
     let window_wrapper = WindowWrapper::new(&self.gpu, event_loop).await?;
     let key = window_wrapper.window.id();
+    info!("Window {key:?} created");
 
     self.windows.insert(key, window_wrapper);
     Ok(key)
@@ -87,8 +87,8 @@ impl State {
         });
 
         let mut command_encoder = self.gpu.device.create_command_encoder(&CommandEncoderDescriptor::default());
-        for pass in &mut self.passes {
-          pass.run(&mut command_encoder, &window_wrapper, &self.gpu, &view);
+        if let Some(sim) = self.sim.as_mut() {
+          sim.render(&mut command_encoder, &self.gpu, window_wrapper, &view);
         }
 
         self.gpu.queue.submit(Some(command_encoder.finish()));
@@ -99,6 +99,15 @@ impl State {
         error!(msg);
       }
     }
+  }
+
+  pub fn compute(&mut self) {
+    let mut command_encoder = self.gpu.device.create_command_encoder(&CommandEncoderDescriptor::default());
+    if let Some(sim) = self.sim.as_mut() {
+      sim.compute(&mut command_encoder, &self.gpu, self.windows.values().collect());
+    }
+
+    self.gpu.queue.submit(Some(command_encoder.finish()));
   }
 
   pub fn resize(&mut self, window_id: WindowId, new_size: PhysicalSize<u32>) {

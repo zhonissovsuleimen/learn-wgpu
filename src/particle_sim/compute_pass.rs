@@ -1,4 +1,7 @@
-use crate::{app::gpu_wrapper::GpuWrapper, particle_sim::particle::Particle};
+use crate::{
+  app::gpu_wrapper::GpuWrapper,
+  particle_sim::{params::Params, particle::Particle},
+};
 use std::time::Instant;
 use wgpu::{
   BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer,
@@ -50,9 +53,9 @@ impl ComputePass {
     }
   }
 
-  pub fn run(&mut self, encoder: &mut CommandEncoder, gpu: &GpuWrapper) {
+  pub fn run(&mut self, encoder: &mut CommandEncoder, gpu: &GpuWrapper, window_count: u32) {
     let queue = &gpu.queue;
-    self.update_params_buffer(queue);
+    self.update_params_buffer(queue, window_count);
 
     let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
       label: Some("Compute pass descriptor"),
@@ -85,13 +88,9 @@ impl ComputePass {
   }
 
   fn init_params_buffer(device: &Device) -> Buffer {
-    let params_arr = [
-      0.0f32, //dt
-    ];
-
     device.create_buffer_init(&BufferInitDescriptor {
       label: Some("Params buffer"),
-      contents: bytemuck::cast_slice(&params_arr),
+      contents: bytemuck::bytes_of(&Params::new()),
       usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
     })
   }
@@ -128,7 +127,7 @@ impl ComputePass {
           binding: 1,
           visibility: ShaderStages::COMPUTE,
           ty: BindingType::Buffer {
-            ty: BufferBindingType::Uniform,
+            ty: BufferBindingType::Storage { read_only: true },
             has_dynamic_offset: false,
             min_binding_size: BufferSize::new(window_buffer.size()),
           },
@@ -241,12 +240,13 @@ impl ComputePass {
     })
   }
 
-  fn update_params_buffer(&mut self, queue: &Queue) {
+  fn update_params_buffer(&mut self, queue: &Queue, window_count: u32) {
     let dt = match self.last_run {
       Some(last) => last.elapsed().as_secs_f32(),
       None => 0.0f32,
     };
-    let new_params_data = [dt];
-    queue.write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&new_params_data));
+
+    let new_params = Params { dt, window_count };
+    queue.write_buffer(&self.params_buffer, 0, bytemuck::bytes_of(&new_params));
   }
 }
