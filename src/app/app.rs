@@ -41,7 +41,7 @@ impl ApplicationHandler for App {
         }
       }
       WindowEvent::RedrawRequested => {
-        self.modules.iter_mut().for_each(|module| module.on_redraw());
+        self.modules.iter_mut().for_each(|module| module.on_render(window_id));
         state.render(window_id);
         state.request_redraw(window_id);
       }
